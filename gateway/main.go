@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 )
 
@@ -16,51 +17,21 @@ func globalHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(prefix, newPath)
 
-	client := http.Client{}
+	proxy := httputil.ReverseProxy{ // TODO: Make a factory so this can be reused
+		Rewrite: func(r *httputil.ProxyRequest) {
+			url, err := url.Parse("https://google.com" + newPath)
+			r.SetXForwarded()
 
-	hopByHopHeaders := map[string]bool{
-		"Connection":          true,
-		"Keep-Alive":          true,
-		"Proxy-Authenticate":  true,
-		"Proxy-Authorization": true,
-		"Te":                  true,
-		"Trailers":            true,
-		"Transfer-Encoding":   true,
-		"Upgrade":             true,
-	}
-
-	targetHost := "https://google.com"
-
-	req, _ := http.NewRequest(r.Method, fmt.Sprintf("%s%s", targetHost, newPath), r.Body)
-
-	for key, parts := range r.Header {
-		if !hopByHopHeaders[key] {
-			for _, val := range parts {
-				req.Header.Add(key, val)
+			if err != nil {
+				panic(err) // FIXME: handle error
 			}
-		}
+
+			r.Out.URL = url
+			r.Out.Host = url.Host // Super annoying but entirely necessary
+		},
 	}
 
-	resp, err := client.Do(req)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	defer resp.Body.Close()
-
-	for key, parts := range resp.Header {
-		if !hopByHopHeaders[key] {
-			for _, val := range parts {
-				w.Header().Add(key, val)
-			}
-		}
-	}
-
-	w.WriteHeader(resp.StatusCode)
-
-	io.Copy(w, resp.Body)
+	proxy.ServeHTTP(w, r)
 }
 
 func main() {
