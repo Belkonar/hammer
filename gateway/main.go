@@ -15,7 +15,7 @@ func globalHandler(w http.ResponseWriter, r *http.Request) {
 	uriParts = uriParts[1:]
 	newPath := "/" + strings.Join(uriParts, "/")
 
-	fmt.Println(prefix, newPath)
+	fmt.Println(prefix, newPath) // just so it won't complain about unused variables
 
 	proxy := httputil.ReverseProxy{ // TODO: Make a factory so this can be reused
 		Rewrite: func(r *httputil.ProxyRequest) {
