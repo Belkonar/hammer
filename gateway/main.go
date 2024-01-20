@@ -5,33 +5,36 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 )
 
 func globalHandler(w http.ResponseWriter, r *http.Request) {
-	uriParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	fmt.Println(r.Host)
 
-	prefix := uriParts[0]
-	uriParts = uriParts[1:]
-	newPath := "/" + strings.Join(uriParts, "/")
-
-	fmt.Println(prefix, newPath) // just so it won't complain about unused variables
-
-	proxy := httputil.ReverseProxy{ // TODO: Make a factory so this can be reused
-		Rewrite: func(r *httputil.ProxyRequest) {
-			url, err := url.Parse("https://google.com" + newPath)
-			r.SetXForwarded()
-
-			if err != nil {
-				panic(err) // FIXME: handle error
-			}
-
-			r.Out.URL = url
-			r.Out.Host = url.Host // Super annoying but entirely necessary
-		},
-	}
+	proxy := makeProxy("http://example.com")
 
 	proxy.ServeHTTP(w, r)
+}
+
+func makeProxy(target string) *httputil.ReverseProxy {
+	return &httputil.ReverseProxy{ // TODO: Make a factory so this can be reused
+		Rewrite: makeRewriter(target),
+	}
+}
+
+func makeRewriter(target string) func(*httputil.ProxyRequest) {
+	return func(r *httputil.ProxyRequest) {
+		target, err := url.Parse(target)
+
+		if err != nil {
+			panic(err) // FIXME: handle error
+		}
+
+		r.SetURL(target)
+
+		r.SetXForwarded()
+		r.Out.Host = target.Host // Super annoying but entirely necessary
+		fmt.Println(r.Out.URL)
+	}
 }
 
 func main() {
@@ -39,5 +42,5 @@ func main() {
 
 	globalHandler := http.HandlerFunc(globalHandler)
 
-	http.ListenAndServe("127.0.0.1:8080", globalHandler)
+	http.ListenAndServe("127.0.0.1:8000", globalHandler)
 }
